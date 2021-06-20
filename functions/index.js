@@ -109,7 +109,59 @@ app.put("/:bank/addOffers", async (req, res) => {
     res.status(204).send();
 });
 
-// app.delete(); - for offers, and banks, and variants
+app.delete("/:bank", async (req, res) => {
+    let success = await _firestore.collection("banks").doc(req.params.bank).delete().then((val) => true).catch(err => {console.log(err); return false;});
+
+    if(success) {
+        res.status(200).send();
+    }
+});
+
+app.delete("/:bank/:variant", async (req, res) => {
+    var offersRef = _firestore.collection('banks').doc(req.params.bank).collection("offers").where("variant", "==", req.params.variant);
+    let batch = _firestore.batch();
+    
+    let success = offersRef.get().then(snapshot => {
+        snapshot.docs.forEach(doc => {
+          batch.delete(doc.ref);
+        });
+        batch.commit();
+        return true;
+      }).catch(err => {console.log(err); return false;});
+    
+        if(success) {
+            const doc = await _firestore.collection("banks").doc(req.params.bank).get();
+            let vars = doc.data()["variants"];
+            let ind = vars.indexOf(req.params.variant);
+
+            if(ind > -1) {
+                vars.splice(ind, 1);
+                await _firestore.collection("banks").doc(req.params.bank).set({
+                    "variants": vars
+                });
+            }
+
+            res.status(200).send();
+        }
+});
+
+app.delete("/:bank/offer/:promoCode", async (req, res) => {
+    var offerRef = _firestore.collection("banks").doc(req.params.bank).collection("offers").where("promoCode", "==", req.params.promoCode);
+    let batch = _firestore.batch();
+
+    let success = offerRef.get().then(snapshot => {
+        snapshot.docs.forEach(doc => {
+            batch.delete(doc.ref);
+        });
+        batch.commit();
+        return true;
+    }).catch(err => {console.log(err); return false;});
+
+    if(success) {
+        res.status(200).send();
+    }
+});
+
 
 
 exports.banks = functions.https.onRequest(app);
