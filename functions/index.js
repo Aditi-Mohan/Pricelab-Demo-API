@@ -34,33 +34,50 @@ app.get("/:bank/offers", async (req, res) => {
 });
 
 app.post("/addBank", async (req, res) => {
-    
-    let vars = [];
-    if(req.body["variants"] !== undefined) {
-        vars = req.body["variants"];
-    }
 
-    if(req.body["offers"] !== undefined) {
-        req.body["offers"].forEach(async (el) => {
-            if(vars.indexOf(el["variant"]) === -1) {
-                vars.push(el["variant"]);
-            }
+    const doc = await _firestore.collection("banks").doc(req.body["bank"]).get();
+    let proceed = true;
+    if(doc.exists) {
+        const snap = await _firestore.collection("banks").doc(req.body["bank"]).collection("offers").get();
+        let batch = _firestore.batch();
 
-            await _firestore.collection("banks").doc(req.body["bank"]).collection("offers").doc().set(
-                {
-                    "title": el["title"],
-                    "variant": el["variant"],
-                    "promoCode": el["promoCode"]
-                }
-            );
+        snap.forEach(doc => {
+            batch.delete(doc.ref);
         });
+        proceed = batch.commit().then(val => true).catch(err => {console.log(err); return false;});
     }
+    
+    if(proceed) {
+        let vars = [];
+        if(req.body["variants"] !== undefined) {
+            vars = req.body["variants"];
+        }
 
-    await _firestore.collection("banks").doc(req.body["bank"]).set({
-        "variants": vars
-    });
+        if(req.body["offers"] !== undefined) {
+            req.body["offers"].forEach(async (el) => {
+                if(vars.indexOf(el["variant"]) === -1) {
+                    vars.push(el["variant"]);
+                }
 
-    res.status(201).send();
+                await _firestore.collection("banks").doc(req.body["bank"]).collection("offers").doc().set(
+                    {
+                        "title": el["title"],
+                        "variant": el["variant"],
+                        "promoCode": el["promoCode"]
+                    }
+                );
+            });
+        }
+
+        await _firestore.collection("banks").doc(req.body["bank"]).set({
+            "variants": vars
+        });
+
+        res.status(201).send();
+    }
+    else {
+        res.status(500).send();
+    }
 });
 
 app.put("/:bank/addVariants", async (req, res) => {
@@ -110,10 +127,33 @@ app.put("/:bank/addOffers", async (req, res) => {
 });
 
 app.delete("/:bank", async (req, res) => {
-    let success = await _firestore.collection("banks").doc(req.params.bank).delete().then((val) => true).catch(err => {console.log(err); return false;});
+    const doc = await _firestore.collection("banks").doc(req.params.bank).get();
+    let proceed = true;
+    if(doc.exists) {
+        const snap = await _firestore.collection("banks").doc(req.params.bank).collection("offers").get();
+        let batch = _firestore.batch();
 
-    if(success) {
+        snap.forEach(doc => {
+            batch.delete(doc.ref);
+        });
+        proceed = batch.commit().then(val => true).catch(err => {console.log(err); return false;});
+    }
+    else {
         res.status(200).send();
+    }
+    
+    if(proceed) {
+        let success = await _firestore.collection("banks").doc(req.params.bank).delete().then((val) => true).catch(err => {console.log(err); return false;});
+
+        if(success) {
+            res.status(200).send();
+        }
+        else {
+            res.status(500).send();
+        }
+    }
+    else {
+        res.status(500).send();
     }
 });
 
